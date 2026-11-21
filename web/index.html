@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zstd-lab · 手写 zstd 解码器实验室</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --dim: #8b949e; --accent: #d2a8ff;
+    --green: #3fb950; --orange: #f0883e; --red: #f85149; --blue: #58a6ff;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); padding: 24px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; color: var(--accent); }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 20px; }
+  .drop {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 36px;
+    text-align: center; cursor: pointer; transition: border-color .2s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); }
+  .drop .big { font-size: 15px; margin-bottom: 6px; }
+  .drop .hint { color: var(--dim); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .panel h2 { font-size: 13px; color: var(--blue); margin-bottom: 10px; }
+  .stat { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+  .stat .k { color: var(--dim); }
+  .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--orange); }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+  th, td { border-bottom: 1px solid var(--border); padding: 4px 6px; text-align: left; }
+  th { color: var(--dim); font-weight: normal; }
+  td.num { text-align: right; }
+  .bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 2px 0; }
+  .bar > div { height: 100%; }
+  .fse-grid { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 10px; }
+  .cell {
+    width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 10px; background: #0d1117;
+  }
+  .cell .sym { font-size: 13px; color: var(--accent); }
+  .cell .nb { color: var(--dim); font-size: 9px; }
+  .cell.reset { border-color: var(--orange); }
+  .cell.wide { background: #1c2333; }
+  .legend { font-size: 11px; color: var(--dim); margin-top: 8px; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border: 1px solid var(--border); border-radius: 2px; margin: 0 4px 0 10px; vertical-align: middle; }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; margin-bottom: 10px; }
+  .err { color: var(--red); font-size: 12px; margin-top: 8px; white-space: pre-wrap; }
+  .footer { color: var(--dim); font-size: 11px; margin-top: 24px; line-height: 1.8; }
+  a { color: var(--blue); }
+  textarea { width: 100%; height: 60px; background: #0d1117; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px; font-size: 11px; font-family: inherit; }
+</style>
+</head>
+<body>
+<h1>zstd-lab</h1>
+<div class="sub">从零手写的 Zstandard 解码器（RFC 8878）· 单文件 · 纯本地运行 · 与 DEFLATE 双篇对照的第二篇</div>
+
+<div class="drop" id="drop">
+  <div class="big">拖入 .zst 文件，或点击选择</div>
+  <div class="hint">zstd 帧（0x28B52FFD）与 skippable 帧 · 逐字节解码 + 块结构可视化 + FSE 状态机</div>
+  <input type="file" id="file" hidden>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>解码结果</h2>
+    <div id="stats"></div>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="panel">
+    <h2>帧结构（块列表）</h2>
+    <div id="blocks"><div class="hint" style="color:var(--dim)">等待输入…</div></div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <h2>FSE 状态机可视化（预定义解码表——规范 Appendix A）</h2>
+  <select id="fseSel"></select>
+  <div class="legend">
+    每格 = 一个状态：大字为该状态输出的符号，小字为转移位宽 n。<br>
+    <span class="sw" style="background:#1c2333"></span>宽行（下一 2 的幂以下，双倍宽度）&nbsp;
+    <span class="sw" style="border-color:var(--orange)"></span>"小于 1"概率符号（全状态复位，读满 accuracy 位）
+  </div>
+  <div id="fseView"></div>
+  <div class="legend" id="fseNote"></div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <h2>内置演示帧（点击载入）</h2>
+  <div class="hint" style="color:var(--dim);margin-bottom:8px">
+    以下帧由测试侧写入器按规范正方向合成（与本解码器互为镜像）：
+  </div>
+  <button class="demo">演示 1 · RLE 块（单字节 ×100）</button>
+  <button class="demo">演示 2 · Huffman 字面量（规范示例树）</button>
+  <span id="demoHint" class="hint" style="color:var(--dim)"></span>
+</div>
+
+<div class="footer">
+  实现与验收详情见项目 <a href="https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md">RFC 8878（格式规范）</a> ·
+  本页为「1986 vs 2021 压缩对照」双篇的第二篇实验室（第一篇：DEFLATE/gzip）。
+</div>
+
+<script>{{BUNDLE}}</script>
+</body>
+</html>
