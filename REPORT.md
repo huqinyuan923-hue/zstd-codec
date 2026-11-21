@@ -181,3 +181,11 @@ orange 格是"小于 1"概率符号（全状态复位），深色格是双倍宽
 ---
 
 *完。项目目录 `C:\works\zstd-codec`；zstd-lab：<https://zstd-lab.pages.dev>*
+
+---
+
+## 附录 · Mimosa 深度安全审计
+
+- scanId：`scan-2026-11-21T07-10-08.176Z-b6382adf65d8`；seal：`sha256:0f2b7dc7…cd0f13d`
+- 深度扫描 finding：**0**；依赖 95 包，离线公告匹配 **0**
+- 产物目录：`~/.mimosa/security-scans/project-58044ddba7e101c985fd99ee/…`
