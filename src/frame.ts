@@ -227,7 +227,9 @@ function executeSequences(state: FrameState, literals: Uint8Array, seqs: Seq[]):
     }
 
     // 3. 窗口约束：offset ≤ min(已产出, Window_Size)
-    if (offset > state.produced || offset > state.windowSize) throw corrupt('偏移超过窗口/历史范围');
+    if (offset > state.produced || offset > state.windowSize) {
+      throw corrupt(`偏移超过窗口/历史范围 (offset=${offset}, produced=${state.produced}, window=${state.windowSize})`);
+    }
 
     // 4. match 拷贝（倍增法处理重叠）
     const ml = seq.matchLength;

@@ -366,7 +366,7 @@ export function buildLiterals(spec: LitSpec, prevTable?: HufTable): { bytes: Uin
       return { bytes: concat(new Uint8Array([0 | (1 << 2) | ((n & 0xf) << 4), n >>> 4]), spec.data), table: null };
     }
     return {
-      bytes: concat(new Uint8Array([0 | (3 << 2) | (n & 0xf), ...leBytes(n >>> 4, 2)]), spec.data),
+      bytes: concat(new Uint8Array([0 | (3 << 2) | ((n & 0xf) << 4), ...leBytes(n >>> 4, 2)]), spec.data),
       table: null,
     };
   }
@@ -377,7 +377,7 @@ export function buildLiterals(spec: LitSpec, prevTable?: HufTable): { bytes: Uin
       return { bytes: new Uint8Array([1 | (1 << 2) | ((n & 0xf) << 4), n >>> 4, spec.byte]), table: null };
     }
     return {
-      bytes: new Uint8Array([1 | (3 << 2) | (n & 0xf), ...leBytes(n >>> 4, 2), spec.byte]),
+      bytes: new Uint8Array([1 | (3 << 2) | ((n & 0xf) << 4), ...leBytes(n >>> 4, 2), spec.byte]),
       table: null,
     };
   }

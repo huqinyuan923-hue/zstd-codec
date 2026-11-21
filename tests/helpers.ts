@@ -1,5 +1,25 @@
 /** 测试帮手：oracle 单例、伪随机数据、hex 工具。 */
-import { zstdDecompressSync } from 'node:zlib';
+import { zstdDecompressSync, zstdCompressSync, constants } from 'node:zlib';
+
+const C = constants as unknown as Record<string, number>;
+
+/** 按级别压缩（node:zlib 的 level 选项会被忽略，必须走 params）。 */
+export function compressLevel(data: Uint8Array, level: number): Uint8Array {
+  return new Uint8Array(zstdCompressSync(data, {
+    params: { [C.ZSTD_c_compressionLevel!]: level },
+  }));
+}
+
+/** 长距离模式压缩（LDM 开启 + 大窗口）。 */
+export function compressLdm(data: Uint8Array, level: number, windowLog = 27): Uint8Array {
+  return new Uint8Array(zstdCompressSync(data, {
+    params: {
+      [C.ZSTD_c_compressionLevel!]: level,
+      [C.ZSTD_c_enableLongDistanceMatching!]: true,
+      [C.ZSTD_c_windowLog!]: windowLog,
+    },
+  }));
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
